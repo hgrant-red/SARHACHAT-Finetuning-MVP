@@ -1,43 +1,40 @@
 """
-LangGraph workflow: wire nodes, router, and compile the app.
-Each node runs once per invocation then edges to END to wait for user input.
+LangGraph workflow: compiles the 5-stage triage with Subgraph integration.
 """
 
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 
 from state import TriageState
-from router import dynamic_router
-from nodes import (
-    stage_1_initial_info,
-    stage_2_preferences,
-    stage_3_health_screening,
-    stage_4_recommendation,
-    stage_5_profile_verification,
-)
+from nodes import build_stage_nodes
+from stage_3_subgraph import build_stage_3_subgraph
 
+def route_from_start(state: TriageState):
+    """Router dictates where to resume based on current state."""
+    stage = state.get("current_stage", 1)
+    return f"stage_{stage}"
 
 def compile_app(llm):
-    """
-    Build and compile the SARHAchat LangGraph app.
-    llm: ChatOpenAI (or compatible) instance for OpenShift vLLM.
-    """
     workflow = StateGraph(TriageState)
+    
+    nodes = build_stage_nodes(llm)
+    stage_3_subgraph = build_stage_3_subgraph(llm)
 
-    # Bind llm to each node so they don't import it
-    workflow.add_node("stage_1", lambda s: stage_1_initial_info(s, llm))
-    workflow.add_node("stage_2", lambda s: stage_2_preferences(s, llm))
-    workflow.add_node("stage_3", lambda s: stage_3_health_screening(s, llm))
-    workflow.add_node("stage_4", lambda s: stage_4_recommendation(s, llm))
-    workflow.add_node("stage_5", lambda s: stage_5_profile_verification(s, llm))
+    workflow.add_node("stage_1", nodes["stage_1"])
+    workflow.add_node("stage_2", nodes["stage_2"])
+    workflow.add_node("stage_3", stage_3_subgraph) 
+    workflow.add_node("stage_4", nodes["stage_4"])
+    workflow.add_node("stage_5", nodes["stage_5"])
 
-    # Router decides where to send each new invocation (based on state)
-    workflow.add_conditional_edges(START, dynamic_router)
+    # Resume the graph at whatever stage the state tracker is currently on
+    workflow.add_conditional_edges(START, route_from_start)
 
-    # Every node goes to END after generating a response (no infinite loop)
+    # 💥 GUARANTEE that the graph halts and waits for the user after EVERY turn
     workflow.add_edge("stage_1", END)
     workflow.add_edge("stage_2", END)
     workflow.add_edge("stage_3", END)
     workflow.add_edge("stage_4", END)
     workflow.add_edge("stage_5", END)
 
-    return workflow.compile()
+    memory = MemorySaver()
+    return workflow.compile(checkpointer=memory)

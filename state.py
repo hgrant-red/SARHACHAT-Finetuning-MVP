@@ -1,102 +1,76 @@
 """
 State definitions for the SARHAchat 5-stage clinical triage.
-TriageState (TypedDict) and Pydantic Unified models: extract + chat_reply in a single LLM call.
 """
 
-from typing import TypedDict, List, Annotated, Literal
+from typing import TypedDict, List, Annotated, Optional
 import operator
-
 from pydantic import BaseModel, Field
-
 
 # --- THE STATE (Clinical Stage Tracker) ---
 class TriageState(TypedDict, total=False):
-    """State dictionary for the LangGraph workflow."""
+    """State dictionary for the LangGraph workflow. Shared across main graph and subgraphs."""
 
-    # Chat History
     messages: Annotated[List[dict], operator.add]
-
-    # Stage Tracker
     current_stage: int
 
-    # Stage 1: Initial Information Gathering
-    gender: str
+    # Stage 1: Initial Information Gathering (Trimmed)
+    pronouns: str 
+    pregnancy_plans: str
     experience: str
 
-    # Stage 2: Preference Screening
-    frequency: str
-    side_effects: List[str]
+    # Stage 2: Preference Screening (Trimmed & Combined)
+    routine_preference: str  # Combines frequency and delivery
+    avoided_side_effects: List[str]
+    preferences_screened: bool
 
-    # Stage 3: Health Screening
-    medical_history: List[str]
-    health_screened: bool  # True once we've completed the health screening (even if no conditions)
+    # Stage 3: Health Screening (explicit boolean flags for CDC MEC Guidelines)
+    bleeding_disorder: Optional[bool]
+    blood_clots: Optional[bool]
+    high_blood_pressure: Optional[bool]
+    over_35: Optional[bool]
+    smoker: Optional[bool]
+    migraines: Optional[bool]
+    cancer: Optional[bool]
+    lupus: Optional[bool]
+    health_screened: bool 
 
-    # Stage 4 & 5: RAG Context & Final Outputs
-    cdc_guideline_context: str
+    # Stage 4 & 5: Completion
     recommendation: str
     profile_verified: bool
 
 
-# --- Unified Pydantic models (extraction + chat_reply in one call) ---
-class Stage1Unified(BaseModel):
-    """Stage 1: extract gender & experience; respond in chat_reply."""
+# --- EXTRACTION ONLY Pydantic Models ---
 
-    gender: Literal["female", "male", "non-binary", "other", ""] = Field(
+class Stage1Extraction(BaseModel):
+    pronouns: str = Field(
         default="",
-        description="Strictly map to 'female', 'male', 'non-binary', or 'other'. Map to appropriate gende term if not easily mapped",
+        description="Extract the user's pronouns if mentioned (e.g., 'she/her', 'they/them'). Leave empty if not stated.",
+    )
+    pregnancy_plans: str = Field(
+        default="",
+        description="Extract future pregnancy plans (e.g., 'never', 'in a few years'). Leave empty if not stated.",
     )
     experience: str = Field(
         default="",
-        description="Strictly 1-5 words summarizing past birth control use (e.g., 'used pill', 'none'). Empty if unknown.",
-    )
-    chat_reply: str = Field(
-        description="Your empathetic reply to the user. Ask for missing info or say the transition phrase. Keep under 3 sentences.",
+        description="Strictly 1-5 words summarizing past birth control use (e.g., 'used pill', 'none'). Leave empty if not stated.",
     )
 
-
-class Stage2Unified(BaseModel):
-    """Stage 2: extract frequency & side_effects; respond in chat_reply."""
-
-    frequency: str = Field(
+class Stage2Extraction(BaseModel):
+    routine_preference: str = Field(
         default="",
-        description="Strictly 1-3 words: how often they want to think about birth control (e.g., 'daily', 'monthly', 'set-and-forget'). Empty if not stated.",
+        description="Extract their preferred routine or delivery method (e.g., 'daily pill', 'set-and-forget', 'IUD', 'monthly'). Leave empty if not stated.",
     )
-    side_effects: List[str] = Field(
+    avoided_side_effects: List[str] = Field(
         default_factory=list,
-        description="Side effects they want to avoid.",
-    )
-    chat_reply: str = Field(
-        description="Your empathetic reply. Ask for frequency and side-effect preferences, or thank them and transition to health screening.",
+        description="List of side effects they explicitly want to AVOID (e.g., 'weight gain', 'acne'). Empty if none stated.",
     )
 
-
-class Stage3Unified(BaseModel):
-    """Stage 3: extract medical_history; respond in chat_reply."""
-
-    medical_history: List[str] = Field(
-        default_factory=list,
-        description="List of chronic medical conditions mentioned (e.g., migraines, hypertension, diabetes). Empty if none.",
-    )
-
-    answered_health_questions: bool = Field(
-        description="True ONLY if the user explicitly listed medical conditions or explicitly stated they have none. False if they dodged the question, made a joke, or changed the subject."
-    )
-    chat_reply: str = Field(
-        description="If answered_health_questions is True, thank them. If False, politely redirect and ask again if they have chronic medical conditions.",
-    )
-
-
-class Stage4Unified(BaseModel):
-    """Stage 4: recommendation (RAG to be wired later); reply in chat_reply."""
-
-    chat_reply: str = Field(
-        description="Your brief recommendation or placeholder message based on preferences and health history.",
-    )
-
-
-class Stage5Unified(BaseModel):
-    """Stage 5: profile verification (PDF stub); reply in chat_reply."""
-
-    chat_reply: str = Field(
-        description="Your reply: summarize profile and ask if everything looks correct before generating the summary.",
-    )
+class Stage3Extraction(BaseModel):
+    bleeding_disorder: Optional[bool] = Field(default=None, description="True if bleeding disorder. False if explicitly denied.")
+    blood_clots: Optional[bool] = Field(default=None, description="True if blood clots. False if explicitly denied.")
+    high_blood_pressure: Optional[bool] = Field(default=None, description="True if high blood pressure. False if explicitly denied.")
+    over_35: Optional[bool] = Field(default=None, description="True if over 35. False if explicitly denied.")
+    smoker: Optional[bool] = Field(default=None, description="True if smoker. False if explicitly denied.")
+    migraines: Optional[bool] = Field(default=None, description="True if migraines. False if explicitly denied.")
+    cancer: Optional[bool] = Field(default=None, description="True if history of breast/liver/cervical cancer. False if explicitly denied.")
+    lupus: Optional[bool] = Field(default=None, description="True if Lupus (SLE). False if explicitly denied.")

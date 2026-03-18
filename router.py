@@ -13,16 +13,19 @@ def dynamic_router(state: TriageState):
     Route using the exact variables defined in state.py.
     Order of checks matters: we advance only when prior stage data is complete.
     """
-    # Stage 1: Initial Information Gathering (gender, experience)
-    if not state.get("gender") or not state.get("experience"):
+    # Stage 1: Initial Information (pronouns, method_in_mind, pregnancy_plans, experience)
+    if (
+        not state.get("pronouns")
+        or not state.get("pregnancy_plans")
+        or not state.get("experience")
+    ):
         return "stage_1"
 
-    # Stage 2: Preference Screening (frequency)
-    if not state.get("frequency"):
+    # Stage 2: Preference Screening (frequency, delivery_method)
+    if not state.get("preferences_screened", False):
         return "stage_2"
 
-    # Stage 3: Health Screening
-    # Stay in stage_3 until health_screened is True (set when user answers; medical_history may be empty)
+    # Stage 3: Health Screening — stay until health_screened is True
     if not state.get("health_screened", False):
         return "stage_3"
 
