@@ -2,9 +2,11 @@
 LangGraph nodes for SARHAchat clinical triage.
 Returns standard dictionaries for guaranteed state updates.
 """
-
+import os
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.language_models import BaseChatModel
+from langchain_postgres.vectorstores import PGVector
+from langchain_huggingface import HuggingFaceEmbeddings
 from langgraph.graph import END
 
 from state import (
@@ -14,6 +16,7 @@ from state import (
 )
 
 def _stage_1_node(llm: BaseChatModel):
+    # [Your existing Stage 1 code remains exactly the same]
     extractor = llm.with_structured_output(Stage1Extraction)
 
     def node(state: TriageState) -> dict:
@@ -67,6 +70,7 @@ def _stage_1_node(llm: BaseChatModel):
     return node
 
 def _stage_2_node(llm: BaseChatModel):
+    # [Your existing Stage 2 code remains exactly the same]
     extractor = llm.with_structured_output(Stage2Extraction)
 
     def node(state: TriageState) -> dict:
@@ -116,18 +120,105 @@ def _stage_2_node(llm: BaseChatModel):
     return node
 
 def _stage_4_node(llm: BaseChatModel):
-    def node(state: TriageState) -> dict:
-        print("\n⚙️ [SYSTEM] Running Stage 4 Logic...")
-        chat_prompt = (
-            "You are SARHAchat, a clinical birth control assistant. "
-            "The user has completed their profile and medical screening. "
-            "Provide a brief, contraceptive recommendation based on what they have shared."
+    # Initialize the Vector Store ONCE when the app compiles
+    db_url = os.environ.get("DATABASE_URL")
+    vector_store = None
+    if db_url:
+        print("⚙️ [SYSTEM] Initializing PGVector connection for Stage 4...")
+        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        vector_store = PGVector(
+            embeddings=embeddings,
+            collection_name="cdc_mec_rules",
+            connection=db_url,
         )
-        reply = llm.invoke([SystemMessage(content=chat_prompt)])
-        return {"messages": [reply], "recommendation": reply.content, "current_stage": 5}
+    else:
+        print("⚠️ [WARNING] DATABASE_URL not found. RAG will be disabled in Stage 4.")
+
+    def node(state: TriageState) -> dict:
+        print("\n⚙️ [SYSTEM] Running Stage 4 Logic (Structured RAG)...")
+        
+        active_conditions = []
+        retrieved_rules = []
+        
+        # 1. Map the state booleans to the exact keywords found in the CDC tables
+        condition_mapping = {
+            "bleeding_disorder": "bleeding",
+            "blood_clots": "dvt",
+            "high_blood_pressure": "hypertension",
+            "over_35": "35",
+            "smoker": "smoking",
+            "migraines": "migraine",
+            "cancer": "cancer",
+            "lupus": "sle" # Systemic lupus erythematosus
+        }
+
+        rag_context = "No major CDC contraindications found for these conditions."
+
+        # 2. Query PGVector using Strict Metadata Filtering
+        if vector_store:
+            for state_key, search_term in condition_mapping.items():
+                if state.get(state_key) is True:
+                    active_conditions.append(state_key)
+                    print(f"🔍 [RAG] Filtering CDC Guidelines strictly for: {search_term}")
+                    
+                    # 💥 Structured RAG: We bypass semantic guessing and filter strictly by the metadata column
+                    docs = vector_store.similarity_search(
+                        query="safety categories", 
+                        k=15, 
+                        filter={"condition": {"$ilike": f"%{search_term}%"}} 
+                    )
+                    
+                    for doc in docs:
+                        # Only keep the chunks where the CDC strictly prohibits or warns against it (Categories 3 & 4)
+                        if doc.metadata.get("category_score", 1) >= 3:
+                            retrieved_rules.append(doc.page_content)
+            
+            # Remove duplicates and combine into our final context
+            if retrieved_rules:
+                rag_context = "\n".join(set(retrieved_rules))
+                
+                # --- DEBUGGING BLOCK ---
+                print("\n" + "▼"*60)
+                print(f"🛠️ DEBUG: METADATA FILTERED CHUNKS (Categories 3 & 4)")
+                print("▼"*60)
+                print(rag_context)
+                print("▲"*60 + "\n")
+
+        # 3. The "Separation of Concerns" Prompt
+        instruction = (
+            "You are SARHAchat, a clinical birth control assistant in Stage 4: Recommendation. "
+            "Your job is to recommend the best contraceptive methods by cross-referencing the user's preferences "
+            "with the strict medical safety rules in the CDC MEC Guidelines provided below.\n\n"
+            
+            "--- STEP 1: SAFETY FIRST (STRICT RULES) ---\n"
+            "Review the CDC MEC Guidelines below. If a method is listed as Category 3 or Category 4 "
+            "for ANY of the user's active health conditions, it is medically unsafe. You MUST NOT recommend it. "
+            "Instead, briefly explain why it is unsafe.\n\n"
+            
+            "--- STEP 2: APPLY PREFERENCES ---\n"
+            "Out of the methods that are medically safe (Category 1 or 2), prioritize recommending the ones "
+            "that best match the user's routine and side-effect preferences.\n\n"
+            
+            f"USER PREFERENCES:\n"
+            f"- Preferred Routine/Delivery: {state.get('routine_preference')}\n"
+            f"- Avoiding Side Effects: {', '.join(state.get('avoided_side_effects', []))}\n\n"
+            
+            f"ACTIVE HEALTH CONDITIONS: {', '.join(active_conditions) if active_conditions else 'None'}\n\n"
+            
+            f"--- CDC MEC GUIDELINES (CONTEXT) ---\n{rag_context}\n-----------------------------------"
+        )
+        
+        reply = llm.invoke([SystemMessage(content=instruction)])
+        
+        return {
+            "messages": [reply], 
+            "recommendation": reply.content, 
+            "current_stage": 5
+        }
     return node
 
 def _stage_5_node(llm: BaseChatModel):
+    # [Your existing Stage 5 code remains exactly the same]
     def node(state: TriageState) -> dict:
         print("\n⚙️ [SYSTEM] Running Stage 5 Logic...")
         chat_prompt = "You are SARHAchat. Ask if everything looks correct."
