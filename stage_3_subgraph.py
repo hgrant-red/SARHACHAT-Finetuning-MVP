@@ -7,6 +7,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.language_models import BaseChatModel
 
+from config import UNIVERSAL_PERSONA
 from state import TriageState, Stage3Extraction
 
 def build_stage_3_subgraph(llm: BaseChatModel):
@@ -26,8 +27,8 @@ def build_stage_3_subgraph(llm: BaseChatModel):
             try:
                 extraction_prompt = (
                     "You are a strict data extractor for CDC guidelines. "
-                    "Read the AI's question and the User's answer to understand the context. "
-                    "If the AI asked about specific conditions and the user says 'no', 'none', or 'no to all', "
+                    "Read the question and the User's answer to understand the context. "
+                    "If the user says 'no', 'none', or 'no to all' about questions on specific conditions "
                     "you MUST map 'False' to those specific conditions. "
                     "If a condition is not being discussed, leave it as null/None."
                 )
@@ -41,6 +42,17 @@ def build_stage_3_subgraph(llm: BaseChatModel):
                     val = getattr(extracted, field)
                     if val is not None:
                         extracted_data[field] = val
+                
+                # 🛠️ FIXED MERGE LOGIC: Always combine old and new, and always return it.
+                current_others = state.get("other_conditions", [])
+                new_others = getattr(extracted, "other_conditions", [])
+                
+                # Combine the lists and remove duplicates
+                combined_others = list(set(current_others + new_others))
+                
+                # Always assign it to extracted_data, even if it's empty
+                extracted_data["other_conditions"] = combined_others
+
             except Exception as e:
                 print(f"Extraction failed safely: {e}")
 
@@ -48,7 +60,8 @@ def build_stage_3_subgraph(llm: BaseChatModel):
 
     def assess_and_ask(state: TriageState) -> dict:
         print("\n⚙️ [SUBGRAPH] Assessing CDC Guidelines...")
-        
+
+        messages = state.get("messages", [])
         # We divide the 8 conditions into 3 specific chunks
         chunk_1 = ["over_35", "smoker"]
         chunk_2 = ["blood_clots", "high_blood_pressure", "bleeding_disorder"]
@@ -69,45 +82,44 @@ def build_stage_3_subgraph(llm: BaseChatModel):
         missing_1 = [c for c in chunk_1 if state.get(c) is None]
         if missing_1:
             friendly_missing = [friendly_names[c] for c in missing_1]
-            chat_prompt = (
-                "You are SARHAchat, a clinical assistant. "
+            chat_prompt = UNIVERSAL_PERSONA + (
                 f"Ask the user: {', '.join(friendly_missing)}? "
-                "CRITICAL: You MUST ask about all of these specific things. Keep it to one conversational sentence."
+                "Combine these into a single, natural question. Do not use numbered lists."
             )
-            reply = llm.invoke([SystemMessage(content=chat_prompt)])
+            
+            reply = llm.invoke([SystemMessage(content=chat_prompt)] + messages[-2:])
             return {"messages": [reply], "health_screened": False, "current_stage": 3}
 
         # --- Check Chunk 2 (Blood/Cardio) ---
         missing_2 = [c for c in chunk_2 if state.get(c) is None]
         if missing_2:
             friendly_missing = [friendly_names[c] for c in missing_2]
-            chat_prompt = (
-                "You are SARHAchat. Thank them for the previous answers. "
+            chat_prompt = UNIVERSAL_PERSONA + (
+                "Thank them for their previous answers. "
                 f"Now ask if they have any history of: {', '.join(friendly_missing)}. "
-                "CRITICAL: You MUST list all of these specific conditions. Keep it brief."
+                "List these conditions naturally in a single sentence."
             )
-            reply = llm.invoke([SystemMessage(content=chat_prompt)])
+            reply = llm.invoke([SystemMessage(content=chat_prompt)] + messages[-2:])
             return {"messages": [reply], "health_screened": False, "current_stage": 3}
             
         # --- Check Chunk 3 (Other conditions) ---
         missing_3 = [c for c in chunk_3 if state.get(c) is None]
         if missing_3:
             friendly_missing = [friendly_names[c] for c in missing_3]
-            chat_prompt = (
-                "You are SARHAchat. We are almost done with the health screening. "
-                f"Ask if they have any history of: {', '.join(friendly_missing)}. "
-                "CRITICAL: You MUST list all of these specific conditions."
+            chat_prompt = UNIVERSAL_PERSONA + (
+                "Mention that we are almost done with the health screening. "
+                f"Ask if they have any history of: {', '.join(friendly_missing)}."
             )
-            reply = llm.invoke([SystemMessage(content=chat_prompt)])
+            reply = llm.invoke([SystemMessage(content=chat_prompt)] + messages[-2:])
             return {"messages": [reply], "health_screened": False, "current_stage": 3}
 
         # --- All Checks Passed ---
-        chat_prompt = (
-            "You are SARHAchat. The health screening is complete. "
-            "Thank the user warmly for sharing their medical history and let them know "
-            "you are reviewing everything to provide a birth control recommendation next."
+        chat_prompt = UNIVERSAL_PERSONA + (
+            "Thank the user for sharing their medical history. "
+            "Let them know you are now reviewing everything to provide a safe "
+            "birth control recommendation."
         )
-        reply = llm.invoke([SystemMessage(content=chat_prompt)])
+        reply = llm.invoke([SystemMessage(content=chat_prompt)] + messages[-2:])
         return {"messages": [reply], "health_screened": True, "current_stage": 4}
 
     workflow = StateGraph(TriageState)

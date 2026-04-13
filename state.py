@@ -3,14 +3,15 @@ State definitions for the SARHAchat 5-stage clinical triage.
 """
 
 from typing import TypedDict, List, Annotated, Optional
-import operator
 from pydantic import BaseModel, Field
+from langgraph.graph.message import add_messages
+from langchain_core.messages import AnyMessage
 
 # --- THE STATE (Clinical Stage Tracker) ---
 class TriageState(TypedDict, total=False):
     """State dictionary for the LangGraph workflow. Shared across main graph and subgraphs."""
 
-    messages: Annotated[List[dict], operator.add]
+    messages: Annotated[list[AnyMessage], add_messages]
     current_stage: int
 
     # Stage 1: Initial Information Gathering (Trimmed)
@@ -32,6 +33,7 @@ class TriageState(TypedDict, total=False):
     migraines: Optional[bool]
     cancer: Optional[bool]
     lupus: Optional[bool]
+    other_conditions: List[str]
     health_screened: bool 
 
     # Stage 4 & 5: Completion
@@ -44,7 +46,7 @@ class TriageState(TypedDict, total=False):
 class Stage1Extraction(BaseModel):
     pronouns: str = Field(
         default="",
-        description="Extract the user's pronouns if mentioned (e.g., 'she/her', 'they/them'). Leave empty if not stated.",
+        description="Extract the user's pronouns if mentioned (e.g., 'women'='she/her', 'ma'-'him/he', non-binary''they/them'). Leave empty if not stated.",
     )
     pregnancy_plans: str = Field(
         default="",
@@ -69,8 +71,12 @@ class Stage3Extraction(BaseModel):
     bleeding_disorder: Optional[bool] = Field(default=None, description="True if bleeding disorder. False if explicitly denied.")
     blood_clots: Optional[bool] = Field(default=None, description="True if blood clots. False if explicitly denied.")
     high_blood_pressure: Optional[bool] = Field(default=None, description="True if high blood pressure. False if explicitly denied.")
-    over_35: Optional[bool] = Field(default=None, description="True if over 35. False if explicitly denied.")
-    smoker: Optional[bool] = Field(default=None, description="True if smoker. False if explicitly denied.")
+    over_35: Optional[bool] = Field(default=None, description="True if over 35. If an age is given etc '25' map that to over or under 35. False if explicitly denied.")
+    smoker: Optional[bool] = Field(default=None, description="True if the user smokes cigarettes, or vapes. False if explicitly denied.")
     migraines: Optional[bool] = Field(default=None, description="True if migraines. False if explicitly denied.")
-    cancer: Optional[bool] = Field(default=None, description="True if history of breast/liver/cervical cancer. False if explicitly denied.")
+    cancer: Optional[bool] = Field(default=None, description="True if history of cancer. False if explicitly denied.")
     lupus: Optional[bool] = Field(default=None, description="True if Lupus (SLE). False if explicitly denied.")
+    other_conditions: List[str] = Field( # 🛠️ ADD THIS ENTIRE FIELD
+        default_factory=list, 
+        description="Extract any OTHER specific medical conditions, diseases, or diagnoses the user explicitly volunteers (e.g., 'diabetes', 'epilepsy'). Do NOT make things up. Leave empty if none."
+    )

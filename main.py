@@ -11,12 +11,16 @@ from state import TriageState
 from graph import compile_app
 
 # OpenShift internal vLLM URL 
-OPENSHIFT_MODEL_URL = "https://redhataillama-31-8b-instruct-predictor.sarhachat-mvp.svc.cluster.local:8443/v1"
+# OPENSHIFT_MODEL_URL = "https://redhataillama-31-8b-instruct-predictor.sarhachat-mvp.svc.cluster.local:8443/v1"    # uncomment to swap out for llama model, make sure it is deployed
+OPENSHIFT_MODEL_URL = "https://redhataimistral-small-31-24b-predictor.sarhachat-mvp.svc.cluster.local:8443/v1"     # uncomment to use mistral 24b model, make sure it is deployed
+# OPENSHIFT_MODEL_URL = "https://redhataigemma-2-9b-it-predictor.sarhachat-mvp.svc.cluster.local:8443/v1"
 os.environ["OPENAI_API_BASE"] = OPENSHIFT_MODEL_URL
 
 # LLM for all nodes
 llm = ChatOpenAI(
-    model="redhataillama-31-8b-instruct",
+    # model="redhataigemma-2-9b-it",
+    # model="redhataillama-31-8b-instruct",    # swap out to use llama model here
+    model="redhataimistral-small-31-24b",
     temperature=0.2,
     max_tokens=1500,
 )
@@ -40,6 +44,7 @@ def get_initial_state() -> TriageState:
         "migraines": None,
         "cancer": None,
         "lupus": None,
+        "other_conditions": [],
         "health_screened": False,
         "recommendation": "",
         "profile_verified": False,
@@ -75,6 +80,7 @@ def print_state_tracker(state: TriageState):
     print(f" > 35: {fmt(state.get('over_35'))}    | Smoker: {fmt(state.get('smoker'))}   | High BP: {fmt(state.get('high_blood_pressure'))}")
     print(f" Clots: {fmt(state.get('blood_clots'))} | Bleeding: {fmt(state.get('bleeding_disorder'))} | Migraines: {fmt(state.get('migraines'))}")
     print(f" Cancer: {fmt(state.get('cancer'))} | Lupus: {fmt(state.get('lupus'))}\n")
+    print(f"Other: {', '.join(state.get('other_conditions', [])) if state.get('other_conditions') else '[ ]'}")
 
     print("--- Stage 4 & 5: Completion ---")
     rec_status = "Generated" if state.get('recommendation') else "[ ]"
