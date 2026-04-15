@@ -56,7 +56,7 @@ def _stage_1_node(llm: BaseChatModel):
         if missing:
             chat_prompt = UNIVERSAL_PERSONA + (
                 f"We still need to know: {', '.join(missing)}. "
-                "Ask them conversationally for this information in 1-2 sentences."
+                "Greet them and ask them conversationally for this information in 1-2 sentences."
             )
             reply = llm.invoke([SystemMessage(content=chat_prompt)] + messages[-2:])
             return {"messages": [reply], "current_stage": 1, **state_updates}
