@@ -1,10 +1,10 @@
-# SARHAchat: Compound AI Medical Triage Assistant
+# SAHRAchat: Compound AI Medical Triage Assistant
 
-SARHAchat (Sexual and Reproductive Health Assistant) is a proof-of-concept clinical triage and educational chatbot. Built to run on **Red Hat OpenShift AI (RHOAI)**, this project demonstrates a "Compound AI System" that enforces deterministic clinical safety guardrails over a fine-tuned generative AI model.
+SAHRAchat (Sexual and Reproductive Health Assistant) is a proof-of-concept clinical triage and educational chatbot. Built to run on **Red Hat OpenShift AI (RHOAI)**, this project demonstrates a "Compound AI System" that enforces deterministic clinical safety guardrails over a fine-tuned generative AI model.
 
 ## Overview
 
-In clinical environments, Large Language Models (LLMs) require strict grounding to prevent medical hallucinations and ensure compliance with established guidelines. SARHAchat achieves this by separating the conversational interface from the clinical decision-making logic:
+In clinical environments, Large Language Models (LLMs) require strict grounding to prevent medical hallucinations and ensure compliance with established guidelines. SAHRAchat achieves this by separating the conversational interface from the clinical decision-making logic:
 
 1. **Inference & Persona (vLLM + LoRA):** The system utilizes `Mistral-Small-24B-Instruct` as the base model. To achieve clinical empathy and proper bedside manner, a low-rank adapter (LoRA) was fine-tuned on nursing transcripts. This adapter is dynamically loaded at runtime using vLLM (`--enable-lora=True`), allowing for rapid persona swapping without deploying multiple heavyweight models.
 2. **Deterministic State Routing (LangGraph):** A Python-based state machine controls the conversational flow. The LLM is restricted from generating recommendations until a strict set of patient variables (Preferences, Age, Blood Pressure, Clotting History, etc.) are successfully extracted and verified in the session state.
@@ -12,7 +12,7 @@ In clinical environments, Large Language Models (LLMs) require strict grounding 
 
 ## System Architecture
 
-![SARHAchat RHOAI Architecture](assets/SAHRAchat_arch_diagram.jpg)
+![SAHRAchat RHOAI Architecture](assets/SAHRAchat_arch_diagram.png)
 
 ## State Machine Workflow
 
