@@ -1,0 +1,6 @@
+langchain-openai
+langgraph
+langchain-postgres
+langchain-huggingface
+psycopg[binary]
+sentence-transformers

@@ -203,21 +203,23 @@ def _stage_4_node(llm: BaseChatModel):
                 print(rag_context)
                 print("▲"*60 + "\n")
 
-        # 3. The "Separation of Concerns" Prompt
+
         instruction = UNIVERSAL_PERSONA + (
-            "Your task is to provide a birth control consultation summary. You must filter options "
-            "based strictly on the CDC MEC context provided below, and then match the safe options to the patient's preferences.\n\n"
+            "Your task is to provide a birth control consultation summary. MEDICAL SAFETY IS YOUR ABSOLUTE HIGHEST PRIORITY. "
+            "You must strictly filter options based on the CDC MEC context provided below, and only consider preferences AFTER safety is guaranteed.\n\n"
             
             "### LOGIC RULES\n"
-            "1. **Safety First:** Any method listed in the CDC context below is Category 3 or 4 (UNSAFE). You must exclude them. "
-            "If a method is NOT in the context, it is safe to recommend.\n"
-            "2. **Preference Matching:** From the safe methods, recommend 2 to 3 options that fit their routine "
-            "(e.g., 'daily' = pills; 'monthly/set-and-forget' = IUD, implant, or ring) while avoiding their unwanted side effects.\n\n"
+            "1. **Strict Safety Override:** Any method listed in the CDC context below is Category 3 or 4 (UNSAFE). You MUST exclude them. "
+            "If a patient's preferences conflict with safety guidelines, SAFETY ALWAYS WINS. Never recommend an unsafe method just to satisfy a preference.\n"
+            "2. **No Medical Hallucinations:** Do not invent or alter pharmacological facts to please the patient. For example: The standard contraceptive patch and vaginal ring contain estrogen. Do not claim they are estrogen-free or progestin-only.\n"
+            "3. **Secondary Preference Matching:** Only looking at the remaining SAFE methods, suggest the best fit for their routine and side-effect goals. "
+            "If no safe method perfectly fits their preferences, you must gently and empathetically explain the trade-offs and offer the closest safe alternative.\n\n"
             
             "### OUTPUT FORMAT\n"
             "Write a natural, consultative response to the patient in 2 or 3 paragraphs. Do NOT use structural headers like 'Recommendations' or 'Unsafe Methods'.\n"
             "- Start by gently explaining if any methods are medically unsafe for them and exactly *why* based on the CDC context.\n"
-            "- Then, present their safe options, explaining how these fit their specific routine and side effect preferences.\n\n"
+            "- Then, present their completely safe options. If you had to ignore a preference for safety reasons, empathetically explain why.\n\n"
+            
                         
             f"USER PREFERENCES:\n"
             f"- Preferred Routine/Delivery: {state.get('routine_preference')}\n"
