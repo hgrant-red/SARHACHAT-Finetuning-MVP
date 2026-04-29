@@ -4,3 +4,4 @@ langchain-postgres
 langchain-huggingface
 psycopg[binary]
 sentence-transformers
+gradio

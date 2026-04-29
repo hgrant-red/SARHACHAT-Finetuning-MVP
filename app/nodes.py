@@ -96,7 +96,7 @@ def _stage_2_node(llm: BaseChatModel):
                 print(f"Extraction failed safely: {e}")
 
         missing = []
-        if not routine: missing.append("preferred routine or delivery method (e.g., daily pill, set-and-forget IUD)")
+        if not routine: missing.append("preferred routine or delivery method (e.g., daily pill, long term IUD)")
 
         state_updates = {
             "routine_preference": routine,
@@ -178,7 +178,13 @@ def _stage_4_node(llm: BaseChatModel):
             
             # 🛠️ CHANGE 2c: Fuzzy Semantic Search for Catch-All Conditions
             other_conditions = state.get("other_conditions", [])
+            ignore_words = ["none", "n/a", "no", "nothing", "na", "false", "unknown"]
+            
             for condition in other_conditions:
+                # Defensive check: skip empty or filler words
+                if not condition or condition.strip().lower() in ignore_words:
+                    continue
+                    
                 active_conditions.append(condition) # Add to list so the LLM prompt sees it
                 print(f"🔍 [RAG] Performing fuzzy semantic search for volunteered condition: {condition}")
                 
@@ -192,9 +198,25 @@ def _stage_4_node(llm: BaseChatModel):
                     if doc.metadata.get("category_score", 1) >= 3:
                         retrieved_rules.append(doc.page_content)
 
-            # Remove duplicates and combine into our final context
+            # Remove duplicates, filter out PDF garbage, format as Markdown, and strip repetitive text
             if retrieved_rules:
-                rag_context = "\n".join(set(retrieved_rules))
+                valid_categories = ["Category 1", "Category 2", "Category 3", "Category 4"]
+                clean_rules = []
+            
+                # Only keep the rule if it actually contains a real CDC Category
+                for rule in set(retrieved_rules):
+                    if any(valid_cat in rule for valid_cat in valid_categories):
+                        # Strip the repetitive intro text to make the UI highly readable
+                        clean_text = rule.replace("According to the 2024 CDC Medical Eligibility Criteria (MEC), ", "")
+                        # Add the Markdown bullet point
+                        clean_rules.append(f"🔹 {clean_text}")
+            
+                if clean_rules:
+                    rag_context = "\n\n".join(clean_rules)
+                else:
+                    rag_context = "No specific Category 1-4 CDC MEC contraindications found for these conditions."
+            else:
+                rag_context = "No specific CDC MEC contraindications found."
                 
                 # --- DEBUGGING BLOCK ---
                 print("\n" + "▼"*60)
@@ -235,7 +257,8 @@ def _stage_4_node(llm: BaseChatModel):
         return {
             "messages": [reply], 
             "recommendation": reply.content, 
-            "current_stage": 5
+            "current_stage": 5,
+            "rag_context": rag_context
         }
     return node
 

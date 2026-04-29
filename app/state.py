@@ -38,6 +38,7 @@ class TriageState(TypedDict, total=False):
 
     # Stage 4 & 5: Completion
     recommendation: str
+    rag_context: str
     profile_verified: bool
 
 

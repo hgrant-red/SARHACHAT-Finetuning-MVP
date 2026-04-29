@@ -41,3 +41,23 @@ The LangGraph application enforces a multi-stage triage process. The model canno
 ├── assets/                     # Architecture and workflow diagrams
 ├── requirements-app.txt        # Runtime dependencies (LangGraph, vLLM client)
 └── requirements-lora.txt       # Training dependencies (Unsloth, PyTorch)
+
+## 🖥️ Running the Clinical MVP GUI (Gradio)
+
+While the core LangGraph logic can be tested in the terminal using `main.py`, we have included a fully featured Gradio Web UI designed specifically for clinical and architectural demonstrations.
+
+The GUI features a "Split-Screen" design to prove the auditable nature of our architecture:
+* **Left Pane (The Patient View):** A clean chat interface interacting with our LoRA fine-tuned Mistral model.
+* **Right Pane (The Architect View):** A live JSON state tracker showing LangGraph strictly extracting clinical variables, plus an expandable module showing the exact 2024 CDC MEC safety rules retrieved via pgvector (RAG).
+
+### How to Launch the GUI
+Ensure your virtual environment is active and your OpenShift vLLM instance is running.
+
+1. Navigate to the root of the project directory.
+2. Run the Gradio app:
+   ```bash
+   python app/app_gradio.py
+3. Look at the terminal output for the public URL (e.g., https://xxxxxx.gradio.live). 
+    Click this link to open the UI in a full-screen, unblocked browser tab.
+
+Note: The Gradio UI includes a share=True flag by default. This safely tunnels the UI through the Jupyter/OpenShift proxy so it can be easily shared during live presentations.
