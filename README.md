@@ -33,7 +33,6 @@ The LangGraph application enforces a multi-stage triage process. The model canno
 │   └── config.py               # Environment and LLM client configuration
 ├── data/                       # Knowledge base and training assets
 │   ├── cdc_mec_tables_only.pdf # Source CDC guidelines
-│   └── sarhachat_training_data.jsonl # Sample dataset for LoRA fine-tuning
 ├── fine-tuning/                # Model training scripts
 │   └── train_lora.py           # Unsloth/TRL script for Mistral 24B fine-tuning
 ├── infrastructure/             # Deployment and data ingestion scripts
