@@ -1,3 +1,4 @@
+
 import os
 import re
 import pandas as pd
@@ -6,10 +7,21 @@ from langchain_core.documents import Document
 from langchain_postgres.vectorstores import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
 
-print("📄 Parsing CDC Guidelines with Docling...")
+# --- ENVIRONMENT CONFIGURATION ---
+# Allows RENCI to override paths via environment variables
+PDF_PATH = os.environ.get("CDC_PDF_PATH", "data/cdc_mec_tables_only.pdf")
+DB_URL = os.environ.get("DATABASE_URL")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "cdc_mec_rules")
+
+print(f"📄 Parsing CDC Guidelines from {PDF_PATH} with Docling...")
 converter = DocumentConverter()
-result = converter.convert("cdc_mec_tables_only.pdf")
-doc = result.document
+try:
+    result = converter.convert(PDF_PATH)
+    doc = result.document
+except Exception as e:
+    print(f"🚨 ERROR: Could not read {PDF_PATH}. Ensure the file exists in the correct directory. Details: {e}")
+    exit()
 
 unrolled_documents = []
 print(f"🔍 Found {len(doc.tables)} tables. Unrolling into semantic statements with Hierarchy Tracking...")
@@ -67,19 +79,18 @@ for table_ix, table in enumerate(doc.tables):
 print(f"✅ Generated {len(unrolled_documents)} highly structured chunks!")
 
 # --- DATABASE UPLOAD PHASE ---
-db_url = os.environ.get("DATABASE_URL")
-if not db_url:
-    print("🚨 ERROR: DATABASE_URL not found. Cannot push to Postgres.")
+if not DB_URL:
+    print("🚨 ERROR: DATABASE_URL not found. Cannot push to Postgres. Please configure your .env file.")
     exit()
 
-print("🧠 Loading embedding model...")
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+print(f"🧠 Loading embedding model ({EMBEDDING_MODEL})...")
+embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
 print("🗑️ Wiping old fragmented RAG tables...")
 vector_store = PGVector(
     embeddings=embeddings,
-    collection_name="cdc_mec_rules",
-    connection=db_url,
+    collection_name=COLLECTION_NAME,
+    connection=DB_URL,
     use_jsonb=True, 
 )
 vector_store.drop_tables() 
@@ -87,8 +98,8 @@ vector_store.drop_tables()
 print("🏗️ Rebuilding fresh tables and collection...")
 vector_store = PGVector(
     embeddings=embeddings,
-    collection_name="cdc_mec_rules",
-    connection=db_url,
+    collection_name=COLLECTION_NAME,
+    connection=DB_URL,
     use_jsonb=True, 
 )
 

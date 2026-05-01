@@ -10,16 +10,16 @@ from langchain_core.messages import HumanMessage
 from state import TriageState
 from graph import compile_app
 
+
+
 # OpenShift internal vLLM URL 
-# OPENSHIFT_MODEL_URL = "https://redhataillama-31-8b-instruct-predictor.sarhachat-mvp.svc.cluster.local:8443/v1"    # uncomment to swap out for llama model, make sure it is deployed
-OPENSHIFT_MODEL_URL = "https://sarhachat-dynamic2-sahrachat-mvp.apps.cluster-xnrzz.xnrzz.sandbox3365.opentlc.com/v1"
+OPENSHIFT_MODEL_URL = "---ENTER MODEL URL HERE FROM MODEL DEPLOYMENTS---"
 os.environ["OPENAI_API_BASE"] = OPENSHIFT_MODEL_URL
 
 # LLM for all nodes
 llm = ChatOpenAI(
-    # model="redhataillama-31-8b-instruct",    # swap out to use llama model here
-    model="sarhachat",
-    # model="sarhachat-dynamic2",
+    model="sarhachat",  #Alternate calling base model vs LORA adaptor model version by changing model name
+    # model="sarhachat-dynamic2",  
     temperature=0.2,
     max_tokens=1500,
 )
